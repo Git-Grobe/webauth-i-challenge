@@ -5,6 +5,9 @@ const cors = require('cors');
 //import bcrypt
 const bcrypt = require('bcryptjs');
 
+// add express session
+const session = require('express-session')
+
 //import restricted middleware
 const restricted = require('./auth/restricted-middleware.js');
 
@@ -13,9 +16,23 @@ const Users = require('./users/users-model.js');
 
 const server = express();
 
+// session config
+const sessionConfig = {
+    name: 'monkey',  // default is sid
+    secret: 'keep it secret, keep it safe!',
+    cookie: {
+      maxAge: 1000 * 30,
+      secure: false, // true in production
+      httpOnly: true,
+    },
+    resave:  false, 
+    saveUninitialized: false, // GDPR compliance laws against setting cookies automatically
+  }
+
 server.use(helmet());
 server.use(express.json());
 server.use(cors());
+server.use(session(sessionConfig));
 
 server.get('/', (req, res) => {
     res.send('Succesful server setup!');
@@ -55,7 +72,8 @@ server.post('/api/register', (req, res) => {
       .first()
       .then(user => {
         if (user && bcrypt.compareSync(password, user.password)) {
-          res.status(200).json({ message: `Welcome ${user.username}!` });
+            req.session.user = user;
+            res.status(200).json({ message: `Welcome ${user.username}!` });
         } else {
           res.status(401).json({ message: 'You shall not pass!' });
         }
@@ -63,6 +81,20 @@ server.post('/api/register', (req, res) => {
       .catch(error => {
         res.status(500).json(error);
       });
+  });
+
+  server.get('/api/logout', (req, res) => {
+    if(req.session) {
+      req.session.destroy(err => {
+        if(err) {
+          res.json({ message: 'you cannot be logged out'})
+        } else {
+          res.status(200).json({ message: 'you have been logged out'})
+        }
+      })
+    } else {
+      res.status(200).json({ message: 'no session found'})
+    }
   });
   
   server.get('/api/users', restricted, (req, res) => {
